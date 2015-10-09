@@ -27,42 +27,47 @@ module OpsWorks::Commands
             "instances often change IP number)", short: 'c', default: false
       end
 
+      ssh_config = []
+
       config = OpsWorks.config
 
-      client = AWS::OpsWorks::Client.new
+      config.accounts.each do |name|
+        ssh_config << "\n\n# --- #{name} ---\n\n"
+        config.use_account(name)
+        instances = []
 
-      instances = []
 
-      stack_ids = if config.stacks.empty?
-        stacks = client.describe_stacks[:stacks]
-        stacks.map{|s| s[:stack_id]}
-      else
-        config.stacks
-      end
+        client = Aws::OpsWorks::Client.new
 
-      stack_ids.each do |stack_id|
-        result = client.describe_instances(stack_id: stack_id)
-        instances += result.instances.select { |i| i[:status] != "stopped" }
-      end
+        stack_ids = if config.stacks.empty?
+                      stacks = client.describe_stacks[:stacks]
+                      stacks.map{|s| s[:stack_id]}
+                    else
+                      config.stacks
+                    end
 
-      instances.reject! { |i| i[:elastic_ip].nil? && i[:public_ip].nil? }
-      instances.map! do |instance|
-        ip = instance[:elastic_ip] || instance[:public_ip]
-        parameters = {
-          "Host"                  => "#{instance[:hostname]} #{ip}",
-          "HostName"              => ip,
-          "User"                  => config.ssh_user_name,
-        }
-        parameters.merge!({
-          "StrictHostKeyChecking" => "no",
-          "UserKnownHostsFile"    => "/dev/null",
-        }) unless options[:host_checking]
-        parameters["LogLevel"] = "quiet" if options[:quiet]
-        parameters.map{ |param| param.join(" ") }.join("\n  ")
+        if stack_ids.empty?
+          config.regions.each do |region|
+            resources = Aws::EC2::Client.new(region: region)
+            instances += resources.describe_instances.reservations.inject([]) do |res, reservation|
+              res << reservation.instances.select { |i| i.state.name != "stopped" }
+            end.flatten
+          end
+          instances = map_ec2_instances(instances)
+        else
+          stack_ids.each do |stack_id|
+            result = client.describe_instances(stack_id: stack_id)
+            instances += result.instances.select { |i| i[:status] != "stopped" }
+          end
+          instances = map_opsworks_instances(instances)
+        end
+
+        ssh_config << build_ssh_config(instances, config.ssh_user_name, options)
+
       end
 
       new_contents = "\n\n#{SSH_PREFIX}\n" <<
-                     "#{instances.join("\n")}\n" <<
+                     "#{ssh_config.join("\n")}\n" <<
                      "#{SSH_POSTFIX}\n\n"
 
       if options[:update]
@@ -92,10 +97,46 @@ module OpsWorks::Commands
         end
 
         puts "Successfully updated #{ssh_config} with " <<
-             "#{instances.length} instances!"
+             "#{ssh_config.length} instances!"
       else
         puts new_contents.strip
       end
     end
+
+    def self.build_ssh_config(instances, user_name, options)
+      instances.reject! { |i| i[:ip].nil? }
+      instances.map! do |instance|
+        parameters = {
+          "Host"                  => "#{instance[:hostname]} #{instance[:ip]}",
+          "HostName"              => instance[:ip],
+          "User"                  => user_name,
+        }
+        parameters.merge!({
+          "StrictHostKeyChecking" => "no",
+          "UserKnownHostsFile"    => "/dev/null",
+        }) unless options[:host_checking]
+        parameters["LogLevel"] = "quiet" if options[:quiet]
+        parameters.map{ |param| param.join(" ") }.join("\n  ")
+      end
+    end
+
+    def self.map_opsworks_instances(instances)
+      instances.inject([]) do |mapped, instance|
+        mapped << {
+          ip: instance.elastic_ip || instance.public_ip,
+          hostname: instance.hostname
+        }
+      end
+    end
+
+    def self.map_ec2_instances(instances)
+      instances.inject([]) do |mapped, instance|
+        mapped << {
+          ip: instance.public_ip_address,
+          hostname: instance.tags.select {|v| v.key == "Name"}.first.value
+        }
+      end
+    end
+
   end
 end
