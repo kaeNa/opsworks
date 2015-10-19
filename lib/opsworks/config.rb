@@ -6,7 +6,7 @@ module OpsWorks
   end
 
   class Config
-    attr_reader :stacks, :ssh_user_name, :accounts, :regions
+    attr_reader :stacks, :accounts, :regions, :options
 
     def initialize
       file = ENV["AWS_CONFIG_FILE"] || "#{ENV['HOME']}/.aws/config"
@@ -35,9 +35,9 @@ module OpsWorks
           aws_config["aws_secret_access_key"],
         )
       )
+      @options = @ini[account]
       @regions = aws_config['aws_region'].split(',').map(&:strip) rescue []
       @stacks = aws_config['opsworks-stack-id'].split(',').map(&:strip) rescue []
-      @ssh_user_name = aws_config['opsworks-ssh-user-name'].strip
     end
   end
 end

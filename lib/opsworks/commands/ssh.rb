@@ -62,7 +62,7 @@ module OpsWorks::Commands
           instances = map_opsworks_instances(instances)
         end
 
-        ssh_config << build_ssh_config(instances, config.ssh_user_name, options)
+        ssh_config << build_ssh_config(instances, options.merge(config.options))
 
       end
 
@@ -103,7 +103,9 @@ module OpsWorks::Commands
       end
     end
 
-    def self.build_ssh_config(instances, user_name, options)
+    def self.build_ssh_config(instances, options)
+      user_name = options['opsworks-ssh-user-name'] || options['ssh_user_name']
+
       instances.reject! { |i| i[:ip].nil? }
       instances.map! do |instance|
         parameters = {
@@ -111,6 +113,7 @@ module OpsWorks::Commands
           "HostName"              => instance[:ip],
           "User"                  => user_name,
         }
+        parameters["IdentityFile"] = options['identity_file'] if options['identity_file']
         parameters.merge!({
           "StrictHostKeyChecking" => "no",
           "UserKnownHostsFile"    => "/dev/null",
