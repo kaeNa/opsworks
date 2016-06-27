@@ -20,8 +20,8 @@ module OpsWorks
         @ini['default'] = {
           'aws_access_key_id' => @ini['default']['aws_access_key_id'],
           'aws_secret_access_key' => @ini['default']['aws_secret_access_key'],
-          'opsworks-stack-id' => @ini['opsworks']['stack-id'],
-          'opsworks-ssh-user-name' => @ini['opsworks']['ssh-user-name']
+          'opsworks_stack_id' => @ini['opsworks']['stack-id'],
+          'opsworks_ssh_user_name' => @ini['opsworks']['ssh-user-name']
         }
       end
     end
@@ -37,7 +37,7 @@ module OpsWorks
       )
       @options = @ini[account]
       @regions = aws_config['aws_region'].split(',').map(&:strip) rescue []
-      @stacks = aws_config['opsworks-stack-id'].split(',').map(&:strip) rescue []
+      @stacks = aws_config['opsworks_stack_id'].split(',').map(&:strip) rescue []
     end
   end
 end

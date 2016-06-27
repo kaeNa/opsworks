@@ -32,6 +32,7 @@ module OpsWorks::Commands
       config = OpsWorks.config
 
       config.accounts.each do |name|
+
         ssh_config << "\n\n# --- #{name} ---\n\n"
         config.use_account(name)
         instances = []
@@ -104,7 +105,8 @@ module OpsWorks::Commands
     end
 
     def self.build_ssh_config(instances, options)
-      user_name = options['opsworks-ssh-user-name'] || options['ssh_user_name']
+      puts options
+      user_name = options['opsworks_ssh_user_name'] || options['ssh_user_name']
 
       instances.reject! { |i| i[:ip].nil? }
       instances.map! do |instance|
